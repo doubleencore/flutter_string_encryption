@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import SCrypto
+import Security
 
 public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -63,9 +64,78 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       let key = AESHMACKeys(password: password, salt: salt)
 
       result(key.base64EncodedString)
+        
+    case "generate_public_private_key_pair":
+      guard let arg = call.arguments as? String else {
+        fatalError("args are formatted badly")
+      }
+      do {
+        if let publicKey = try getPublicKeyFromTag(tag: arg),
+          let b64pubKey = base64EncodeKey(key: publicKey) {
+          result(b64pubKey)
+        } else {
+          let publicKey = try generateKeys(tag: arg)
+          if let b64pubKey = base64EncodeKey(key: publicKey) {
+              result(b64pubKey)
+          } else {
+              fatalError("Error generating keys.")
+          }
+        }
+      } catch {
+        fatalError("Error generating keys.")
+      }
 
     default: result(FlutterMethodNotImplemented)
     }
+  }
+    
+  func base64EncodeKey(key: SecKey) -> String? {
+    var error: Unmanaged<CFError>?
+    guard let cfdata = SecKeyCopyExternalRepresentation(key, &error) else {
+        return nil
+    }
+    let data:Data = cfdata as Data
+    let b64Key = data.base64EncodedString()
+    return b64Key
+  }
+    
+  func getPublicKeyFromTag(tag: String) throws -> SecKey? {
+    let tag = tag.data(using: .utf8)!
+    let getquery: [String: Any] = [kSecClass as String: kSecClassKey,
+                                   kSecAttrApplicationTag as String: tag,
+                                   kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+                                   kSecReturnRef as String: true]
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(getquery as CFDictionary, &item)
+    guard status == errSecSuccess else { return nil }
+    let privateKey = item as! SecKey
+    guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
+    }
+    return publicKey
+  }
+    
+  func generateKeys(tag: String) throws -> SecKey {
+    let tag = tag.data(using: .utf8)!
+    let attributes: [String: Any] =
+      [kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+       kSecAttrKeySizeInBits as String: 2048,
+       kSecPrivateKeyAttrs as String:
+        [
+          kSecAttrIsPermanent as String: true,
+          kSecAttrApplicationTag as String: tag
+        ]
+    ]
+    
+    var error: Unmanaged<CFError>?
+    guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+        throw error!.takeRetainedValue() as Error
+    }
+    
+    guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
+    }
+    return publicKey
   }
 }
 

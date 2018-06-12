@@ -25,6 +25,9 @@ abstract class StringCryptor {
   /// In case the [key] is wrong or the [data] has been forged, a
   /// [MacMismatchException] is thrown
   Future<String> decrypt(String data, String key);
+  
+  /// Generates a Pubilic and Private key.
+  Future<String> generatePublicPrivateKeyPairWithTag(String tag);
 }
 
 /// Implementation of [StringCryptor] using platform channels
@@ -77,6 +80,10 @@ class PlatformStringCryptor implements StringCryptor {
         "password": password,
         "salt": salt,
       });
+
+  @override
+  Future<String> generatePublicPrivateKeyPairWithTag(String tag) async =>
+    await _channel.invokeMethod("generate_public_private_key_pair", tag);
 }
 
 class MacMismatchException implements Exception {
