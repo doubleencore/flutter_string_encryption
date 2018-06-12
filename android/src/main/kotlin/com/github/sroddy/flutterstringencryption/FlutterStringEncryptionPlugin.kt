@@ -62,6 +62,13 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
 
         result.success(keyString)
       }
+      "generate_public_private_key_pair" -> {
+        val tag = call.argument<String>("tag")
+
+        // TODO Implement Me
+
+        result.success("")
+      }
       else -> result.notImplemented()
     }
   }
