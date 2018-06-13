@@ -87,15 +87,21 @@ class PlatformStringCryptor implements StringCryptor {
 
   @override
   Future<String> generatePublicPrivateKeyPairWithTag(String tag) async =>
-    await _channel.invokeMethod("generate_public_private_key_pair", tag);
+    await _channel.invokeMethod("generate_public_private_key_pair", <String, String>{
+      "tag": tag
+    });
 
   @override
   Future<String> getPublicKeyWithTag(String tag) async => 
-  await _channel.invokeMethod("get_public_key", tag);
+  await _channel.invokeMethod("get_public_key", <String, String>{
+    "tag": tag
+  });
 
   @override
   Future<String> deletePublicPrivateKeysWithTag(String tag) async => 
-    await _channel.invokeMethod("delete_public_private_key_pair", tag);
+    await _channel.invokeMethod("delete_public_private_key_pair", <String, String>{
+      "tag": tag
+    });
 }
 
 class MacMismatchException implements Exception {

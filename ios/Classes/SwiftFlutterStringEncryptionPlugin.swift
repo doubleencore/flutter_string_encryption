@@ -66,15 +66,16 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       result(key.base64EncodedString)
         
     case "generate_public_private_key_pair":
-      guard let arg = call.arguments as? String else {
+      guard let arg = call.arguments as? [String: String],
+        let tag = arg["tag"] else {
         fatalError("args are formatted badly")
       }
       do {
-        if let publicKey = try getPublicKeyFromTag(tag: arg),
+        if let publicKey = try getPublicKeyFromTag(tag: tag),
           let b64pubKey = base64EncodeKey(key: publicKey) {
           result(b64pubKey)
         } else {
-          let publicKey = try generateKeys(tag: arg)
+          let publicKey = try generateKeys(tag: tag)
           if let b64pubKey = base64EncodeKey(key: publicKey) {
               result(b64pubKey)
           } else {
@@ -85,23 +86,25 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
         fatalError("Error generating keys.")
       }
     case "get_public_key":
-      guard let arg = call.arguments as? String else {
+      guard let arg = call.arguments as? [String: String],
+        let tag = arg["tag"] else {
         fatalError("args are formatted badly")
       }
       do {
-        if let publicKey = try getPublicKeyFromTag(tag: arg) {
+        if let publicKey = try getPublicKeyFromTag(tag: tag) {
           result(base64EncodeKey(key: publicKey))
         }
       } catch {
         
       }
     case "delete_public_private_key_pair":
-      guard let arg = call.arguments as? String else {
+      guard let arg = call.arguments as? [String: String],
+        let tag = arg["tag"] else {
         fatalError("args are formatted badly")
       }
       
       do {
-        try deleteKeyWithTag(tag: arg)
+        try deleteKeyWithTag(tag: tag)
       } catch {
         fatalError("Error generating keys.")
       }
