@@ -21,11 +21,11 @@ https://github.com/sgl0v/SCrypto
 
 ## Support
 In order to work on iOS, you need to bump the iOS support version up to
-9.0. This can be done inside your ios project Podfile by uncommenting
+10.0. This can be done inside your ios project Podfile by uncommenting
 the very first line of the file:
 ```
 # Uncomment this line to define a global platform for your project
-platform :ios, '9.0'
+platform :ios, '10.0'
 ```
 
 ## Usage
