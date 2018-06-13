@@ -84,8 +84,42 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       } catch {
         fatalError("Error generating keys.")
       }
+    case "get_public_key":
+      guard let arg = call.arguments as? String else {
+        fatalError("args are formatted badly")
+      }
+      do {
+        if let publicKey = try getPublicKeyFromTag(tag: arg) {
+          result(base64EncodeKey(key: publicKey))
+        }
+      } catch {
+        
+      }
+    case "delete_public_private_key_pair":
+      guard let arg = call.arguments as? String else {
+        fatalError("args are formatted badly")
+      }
+      
+      do {
+        try deleteKeyWithTag(tag: arg)
+      } catch {
+        fatalError("Error generating keys.")
+      }
 
     default: result(FlutterMethodNotImplemented)
+    }
+  }
+  
+  func deleteKeyWithTag(tag: String) throws {
+    let tag = tag.data(using: .utf8)!
+    let getquery: [String: Any] = [kSecClass as String: kSecClassKey,
+                                   kSecAttrApplicationTag as String: tag,
+                                   kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+                                   kSecReturnRef as String: true]
+    
+    let status = SecItemDelete(getquery as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw KeychainError.unhandledError(status: status)
     }
   }
     
@@ -270,4 +304,10 @@ struct AESHMACKeys {
 
 enum CryptoError: Error {
   case macMismatch
+}
+
+enum KeychainError: Error {
+  case noPassword
+  case unexpectedPasswordData
+  case unhandledError(status: OSStatus)
 }

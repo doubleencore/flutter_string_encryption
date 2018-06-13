@@ -28,6 +28,10 @@ abstract class StringCryptor {
   
   /// Generates a Pubilic and Private key.
   Future<String> generatePublicPrivateKeyPairWithTag(String tag);
+
+  Future<String> getPublicKeyWithTag(String tag);
+
+  Future<String> deletePublicPrivateKeysWithTag(String tag);
 }
 
 /// Implementation of [StringCryptor] using platform channels
@@ -84,6 +88,14 @@ class PlatformStringCryptor implements StringCryptor {
   @override
   Future<String> generatePublicPrivateKeyPairWithTag(String tag) async =>
     await _channel.invokeMethod("generate_public_private_key_pair", tag);
+
+  @override
+  Future<String> getPublicKeyWithTag(String tag) async => 
+  await _channel.invokeMethod("get_public_key", tag);
+
+  @override
+  Future<String> deletePublicPrivateKeysWithTag(String tag) async => 
+    await _channel.invokeMethod("delete_public_private_key_pair", tag);
 }
 
 class MacMismatchException implements Exception {
