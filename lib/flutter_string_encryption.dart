@@ -26,11 +26,13 @@ abstract class StringCryptor {
   /// [MacMismatchException] is thrown
   Future<String> decrypt(String data, String key);
   
-  /// Generates a Pubilic and Private key.
+  /// Generates a Public and Private key.
   Future<String> generatePublicPrivateKeyPairWithTag(String tag);
 
+  /// Get the BASE64 encoded public key if one exists.
   Future<String> getPublicKeyWithTag(String tag);
 
+  /// Delete the Public Private key from the keystore/keychain.
   Future<String> deletePublicPrivateKeysWithTag(String tag);
 }
 
