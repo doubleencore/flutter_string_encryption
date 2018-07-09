@@ -108,7 +108,28 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       } catch {
         fatalError("Error generating keys.")
       }
-
+    case "encrypt_message_with_public_key":
+      guard let arg = call.arguments as? [String: String],
+        let message = arg["message"],
+        let public_key = arg ["public_key"] else {
+          fatalError("args are formatted badly")
+      }
+      do {
+        result(try encrypt(message: message, base64key: public_key))
+      } catch {
+        fatalError("Error encrypting message")
+      }
+    case "decrypt_message_with_key":
+      guard let arg = call.arguments as? [String: String],
+      let message = arg["message"],
+        let tag = arg["tag"] else {
+          fatalError("args are formatted badly")
+      }
+      do {
+        result(try decrypt(message: message, tag: tag))
+      } catch {
+        fatalError("Error decrypting message")
+      }
     default: result(FlutterMethodNotImplemented)
     }
   }
@@ -137,6 +158,14 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
   }
     
   func getPublicKeyFromTag(tag: String) throws -> SecKey? {
+    guard let privateKey = try self.getPrivateKeyFromTag(tag: tag),
+      let publicKey = SecKeyCopyPublicKey(privateKey) else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
+    }
+    return publicKey
+  }
+  
+  func getPrivateKeyFromTag(tag: String) throws -> SecKey? {
     let tag = tag.data(using: .utf8)!
     let getquery: [String: Any] = [kSecClass as String: kSecClassKey,
                                    kSecAttrApplicationTag as String: tag,
@@ -146,10 +175,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
     let status = SecItemCopyMatching(getquery as CFDictionary, &item)
     guard status == errSecSuccess else { return nil }
     let privateKey = item as! SecKey
-    guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
-    }
-    return publicKey
+    return privateKey
   }
     
   func generateKeys(tag: String) throws -> SecKey {
@@ -173,6 +199,67 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
     }
     return publicKey
+  }
+  
+  func encrypt(message: String, base64key: String) throws -> String {
+    let key = Data.init(base64Encoded: base64key)
+    if key == nil { // base64key was not valid base64 encoded
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
+    }
+    let keyDict:[NSObject:NSObject] = [
+      kSecAttrKeyType: kSecAttrKeyTypeRSA,
+      kSecAttrKeyClass: kSecAttrKeyClassPublic,
+      kSecAttrKeySizeInBits: NSNumber(value: 2048),
+      kSecReturnPersistentRef: true as NSObject
+    ]
+    let publickeysi = SecKeyCreateWithData(key! as CFData, keyDict as CFDictionary, nil)
+    let blockSize = SecKeyGetBlockSize(publickeysi!)
+    var messageEncrypted = [UInt8](repeating: 0, count: blockSize)
+    var messageEncryptedSize = blockSize
+    
+    var status: OSStatus!
+    
+    status = SecKeyEncrypt(publickeysi!, .PKCS1, message, message.count, &messageEncrypted, &messageEncryptedSize)
+    
+    if status != noErr {
+      print("Encryption Error!")
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
+    }
+    let encryptedData = Data(messageEncrypted)
+    let b64encodedEncryptedData = encryptedData.base64EncodedString()
+    return b64encodedEncryptedData
+  }
+  
+  func decrypt(message: String, tag: String) throws -> String {
+    guard let privateKey = try self.getPrivateKeyFromTag(tag: tag) else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+    }
+    
+    if let encryptedData = Data(base64Encoded: message) {
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: encryptedData.count)
+    let stream = OutputStream(toBuffer: buffer, capacity: encryptedData.count)
+    
+    stream.open()
+    encryptedData.withUnsafeBytes({ (p: UnsafePointer<UInt8>) -> Void in
+      stream.write(p, maxLength: encryptedData.count)
+    })
+    
+    stream.close()
+    
+    let encPointer = UnsafePointer<UInt8>(buffer)
+      let blockSize = SecKeyGetBlockSize(privateKey)
+      var decryptedData = [UInt8](repeating: 0, count: Int(blockSize))
+      var decryptedDataLength = blockSize
+      
+      let result = SecKeyDecrypt(privateKey, SecPadding(arrayLiteral: SecPadding.PKCS1), encPointer, decryptedDataLength, &decryptedData, &decryptedDataLength)
+      if let clearText = String(bytes: decryptedData, encoding: String.Encoding.utf8) {
+        return clearText
+      } else {
+        throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+      }
+    } else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+    }
   }
 }
 
