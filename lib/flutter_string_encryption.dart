@@ -25,7 +25,7 @@ abstract class StringCryptor {
   /// In case the [key] is wrong or the [data] has been forged, a
   /// [MacMismatchException] is thrown
   Future<String> decrypt(String data, String key);
-  
+
   /// Generates a Public and Private key.
   Future<String> generatePublicPrivateKeyPairWithTag(String tag);
 
@@ -34,6 +34,10 @@ abstract class StringCryptor {
 
   /// Delete the Public Private key from the keystore/keychain.
   Future<String> deletePublicPrivateKeysWithTag(String tag);
+
+  Future<String> encryptWithKey(String message, String publicKey);
+
+  Future<String> decryptWithKey(String message, String tag);
 }
 
 /// Implementation of [StringCryptor] using platform channels
@@ -74,36 +78,43 @@ class PlatformStringCryptor implements StringCryptor {
 
   @override
   Future<String> generateRandomKey() async =>
-    await _channel.invokeMethod("generate_random_key");
+      await _channel.invokeMethod("generate_random_key");
 
   @override
   Future<String> generateSalt() async =>
-    await _channel.invokeMethod("generate_salt");
+      await _channel.invokeMethod("generate_salt");
 
   @override
   Future<String> generateKeyFromPassword(String password, String salt) async =>
-      await _channel.invokeMethod("generate_key_from_password", <String, String>{
+      await _channel
+          .invokeMethod("generate_key_from_password", <String, String>{
         "password": password,
         "salt": salt,
       });
 
   @override
   Future<String> generatePublicPrivateKeyPairWithTag(String tag) async =>
-    await _channel.invokeMethod("generate_public_private_key_pair", <String, String>{
-      "tag": tag
-    });
+      await _channel.invokeMethod(
+          "generate_public_private_key_pair", <String, String>{"tag": tag});
 
   @override
-  Future<String> getPublicKeyWithTag(String tag) async => 
-  await _channel.invokeMethod("get_public_key", <String, String>{
-    "tag": tag
-  });
+  Future<String> getPublicKeyWithTag(String tag) async => await _channel
+      .invokeMethod("get_public_key", <String, String>{"tag": tag});
 
   @override
-  Future<String> deletePublicPrivateKeysWithTag(String tag) async => 
-    await _channel.invokeMethod("delete_public_private_key_pair", <String, String>{
-      "tag": tag
-    });
+  Future<String> deletePublicPrivateKeysWithTag(String tag) async =>
+      await _channel.invokeMethod(
+          "delete_public_private_key_pair", <String, String>{"tag": tag});
+
+  @override
+  Future<String> encryptWithKey(String message, String publicKey) async =>
+      await _channel.invokeMethod("encrypt_message_with_public_key",
+          <String, String>{"message": message, "public_key": publicKey});
+
+  @override
+  Future<String> decryptWithKey(String message, String tag) async =>
+      await _channel.invokeMethod("decrypt_message_with_key",
+          <String, String>{"message": message, "tag": tag});
 }
 
 class MacMismatchException implements Exception {

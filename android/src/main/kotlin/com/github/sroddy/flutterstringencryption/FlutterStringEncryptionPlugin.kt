@@ -11,18 +11,11 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.spec.RSAKeyGenParameterSpec
 import java.security.spec.RSAKeyGenParameterSpec.F4
-import java.security.GeneralSecurityException
-import java.security.KeyPairGenerator
-import java.security.KeyStore
-import java.security.SecureRandom
 import android.util.Base64
 import android.util.Log
-import android.R.attr.key
-import java.security.PrivateKey
-import java.security.KeyPair
-import java.security.PublicKey
-
-
+import java.security.*
+import javax.crypto.Cipher
+import java.security.spec.X509EncodedKeySpec
 
 
 class FlutterStringEncryptionPlugin(): MethodCallHandler {
@@ -82,8 +75,8 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
       "generate_public_private_key_pair" -> {
         val tag = call.argument<String>("tag")
         val keyPair = generateKeyPair(tag)
-
-        result.success(Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT))
+        val b64publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT)
+        result.success(b64publicKey)
       }
       "get_public_key" -> {
         val tag = call.argument<String>("tag")
@@ -96,11 +89,42 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
         val tag = call.argument<String>("tag")
         deleteKey(tag)
       }
+      "encrypt_message_with_public_key" -> {
+        val message = call.argument<String>("message")
+        val publicKey = call.argument<String>("public_key")
+        val encryptedMessage = encryptMessageWithKey(message, publicKey)
+        result.success(encryptedMessage)
+      }
+      "decrypt_message_with_key" -> {
+        val message = call.argument<String>("message")
+        val tag = call.argument<String>("tag")
+        result.success(decryptMessageWithKey(message, tag))
+      }
       else -> result.notImplemented()
     }
   }
 
-  fun getPublicKey(tag: String): PublicKey? {
+  private fun decryptMessageWithKey(message: String, tag: String): String {
+    val privateKey = getPrivateKey(tag)
+    val decryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+    decryptCipher.init(Cipher.DECRYPT_MODE, privateKey)
+    var clearText = decryptCipher.doFinal(Base64.decode(message, Base64.DEFAULT))
+    return clearText.toString(charset("UTF-8"))
+
+  }
+
+  private fun encryptMessageWithKey(message: String, base64key: String): String {
+    val publicBytes = Base64.decode(base64key, Base64.DEFAULT)
+    val keySpec = X509EncodedKeySpec(publicBytes)
+    val keyFactory = KeyFactory.getInstance("RSA")
+    val publicKey = keyFactory.generatePublic(keySpec)
+    val encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+    encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey)
+    val cryptedBytes = encryptCipher.doFinal(message.toByteArray(charset("UTF-8")))
+    return Base64.encodeToString(cryptedBytes, Base64.DEFAULT)
+  }
+
+  private fun getPublicKey(tag: String): PublicKey? {
     val keystore = KeyStore.getInstance(ANDROID_KEY_STORE)
     keystore.load(null)
     val entry: KeyStore.Entry = keystore.getEntry(tag, null)
@@ -109,8 +133,17 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
       return null
     }
     val cert = keystore.getCertificate(tag)
-    val publicKey = cert.getPublicKey()
-    return publicKey
+    return cert.publicKey
+  }
+
+  private fun getPrivateKey(tag: String): PrivateKey? {
+    val keystore = KeyStore.getInstance(ANDROID_KEY_STORE)
+    keystore.load(null)
+    val entry: KeyStore.Entry = keystore.getEntry(tag, null)
+    if (entry !is KeyStore.PrivateKeyEntry) {
+      return null
+    }
+    return entry.privateKey
   }
 
   fun generateKeyPair(tag: String): KeyPair {
@@ -120,7 +153,7 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
             KeyGenParameterSpec.Builder(
                     tag, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setAlgorithmParameterSpec(RSAKeyGenParameterSpec(2048, F4))
-                    .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_ECB)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
                     .setDigests(KeyProperties.DIGEST_SHA256,
                             KeyProperties.DIGEST_SHA384,
@@ -131,7 +164,7 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
     return keypair
   }
 
-  fun deleteKey(tag: String) {
+  private fun deleteKey(tag: String) {
     val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEY_STORE)
     keyStore.load(null)
     keyStore.deleteEntry(tag)
