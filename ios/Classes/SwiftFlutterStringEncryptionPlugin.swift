@@ -79,11 +79,11 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
           if let b64pubKey = base64EncodeKey(key: publicKey) {
               result(b64pubKey)
           } else {
-              fatalError("Error generating keys.")
+            result(FlutterError(code: "key_generation_error", message: "Error generating keys", details: nil))
           }
         }
       } catch {
-        fatalError("Error generating keys.")
+        result(FlutterError(code: "key_generation_error", message: "Error generating keys.", details: nil))
       }
     case "get_public_key":
       guard let arg = call.arguments as? [String: String],
@@ -95,7 +95,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
           result(base64EncodeKey(key: publicKey))
         }
       } catch {
-        
+        result(FlutterError(code: "public_key_error", message: "Error getting public key.", details: nil))
       }
     case "delete_public_private_key_pair":
       guard let arg = call.arguments as? [String: String],
@@ -106,7 +106,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       do {
         try deleteKeyWithTag(tag: tag)
       } catch {
-        fatalError("Error generating keys.")
+        result(FlutterError(code: "delete_key_error", message: "Error deleting key.", details: nil))
       }
     case "encrypt_message_with_public_key":
       guard let arg = call.arguments as? [String: String],
@@ -117,7 +117,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       do {
         result(try encrypt(message: message, base64key: public_key))
       } catch {
-        fatalError("Error encrypting message")
+        result(FlutterError(code: "encryption_error", message: "Error encrypting message.", details: nil))
       }
     case "decrypt_message_with_key":
       guard let arg = call.arguments as? [String: String],
@@ -128,7 +128,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       do {
         result(try decrypt(message: message, tag: tag))
       } catch {
-        fatalError("Error decrypting message")
+        result(FlutterError(code: "decryption_error", message: "Error decrypting message.", details: nil))
       }
     default: result(FlutterMethodNotImplemented)
     }
