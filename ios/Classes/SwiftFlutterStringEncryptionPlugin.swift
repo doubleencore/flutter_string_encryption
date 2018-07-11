@@ -74,17 +74,18 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
         if let publicKey = try getPublicKeyFromTag(tag: tag),
           let b64pubKey = base64EncodeKey(key: publicKey) {
           result(b64pubKey)
-        } else {
-          let publicKey = try generateKeys(tag: tag)
-          if let b64pubKey = base64EncodeKey(key: publicKey) {
-              result(b64pubKey)
-          } else {
-            result(FlutterError(code: "key_generation_error", message: "Error generating keys", details: nil))
-          }
         }
       } catch {
-        result(FlutterError(code: "key_generation_error", message: "Error generating keys.", details: nil))
+        do {
+          let publicKey = try generateKeys(tag: tag)
+          if let b64pubKey = base64EncodeKey(key: publicKey) {
+            result(b64pubKey)
+          }
+        } catch {
+          result(FlutterError(code: "key_generation_error", message: "Error generating keys", details: nil))
+        }
       }
+      
     case "get_public_key":
       guard let arg = call.arguments as? [String: String],
         let tag = arg["tag"] else {
@@ -183,6 +184,9 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
     let attributes: [String: Any] =
       [kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
        kSecAttrKeySizeInBits as String: 2048,
+       kSecAttrCanDecrypt as String: true,
+       kSecAttrCanEncrypt as String: true,
+       
        kSecPrivateKeyAttrs as String:
         [
           kSecAttrIsPermanent as String: true,
