@@ -19,7 +19,7 @@ import java.security.spec.X509EncodedKeySpec
 
 
 class FlutterStringEncryptionPlugin(): MethodCallHandler {
-  private val ANDROID_KEY_STORE = "AndroidKeyStore"
+  private val _androidKeyStore = "AndroidKeyStore"
   companion object {
     @JvmStatic
     fun registerWith(registrar: Registrar): Unit {
@@ -80,25 +80,42 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
       }
       "get_public_key" -> {
         val tag = call.argument<String>("tag")
-        val publicKey = getPublicKey(tag)
-        publicKey?.let {
-          result.success(Base64.encodeToString(it.encoded, Base64.DEFAULT))
+        try {
+          val publicKey = getPublicKey(tag)
+          publicKey?.let {
+            result.success(Base64.encodeToString(it.encoded, Base64.DEFAULT))
+          }
+        } catch (e: Exception) {
+          result.error("public_key_error", "Error getting public key.", null)
         }
       }
       "delete_public_private_key_pair" -> {
         val tag = call.argument<String>("tag")
-        deleteKey(tag)
+        try {
+            deleteKey(tag)
+        } catch (e: Exception) {
+          result.error("delete_key_error", "Error deleting key.", null)
+        }
       }
       "encrypt_message_with_public_key" -> {
         val message = call.argument<String>("message")
         val publicKey = call.argument<String>("public_key")
         val encryptedMessage = encryptMessageWithKey(message, publicKey)
-        result.success(encryptedMessage)
+        try {
+          result.success(encryptedMessage)
+        } catch (e: Exception) {
+          result.error("encryption_error", "Error encrypting message.", null)
+        }
+
       }
       "decrypt_message_with_key" -> {
         val message = call.argument<String>("message")
         val tag = call.argument<String>("tag")
-        result.success(decryptMessageWithKey(message, tag))
+        try {
+          result.success(decryptMessageWithKey(message, tag))
+        } catch (e: Exception) {
+          result.error("decryption_error", "Error decrypting message.", null)
+        }
       }
       else -> result.notImplemented()
     }
@@ -125,29 +142,26 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
   }
 
   private fun getPublicKey(tag: String): PublicKey? {
-    val keystore = KeyStore.getInstance(ANDROID_KEY_STORE)
+    val keystore = KeyStore.getInstance(_androidKeyStore)
     keystore.load(null)
-    val entry: KeyStore.Entry = keystore.getEntry(tag, null)
-    if (entry !is KeyStore.PrivateKeyEntry) {
-      Log.w(tag, "Not an instance of a PrivateKeyEntry")
-      return null
-    }
     val cert = keystore.getCertificate(tag)
     return cert.publicKey
   }
 
-  private fun getPrivateKey(tag: String): PrivateKey? {
-    val keystore = KeyStore.getInstance(ANDROID_KEY_STORE)
+  private fun getPrivateKey(tag: String): Key? {
+    val keystore = KeyStore.getInstance(_androidKeyStore)
     keystore.load(null)
-    val entry: KeyStore.Entry = keystore.getEntry(tag, null)
+    val entry = keystore.getEntry(tag, null)
     if (entry !is KeyStore.PrivateKeyEntry) {
-      return null
+      Log.w(tag, "Not an instance of a PrivateKeyEntry")
+      throw Exception("Not an instance of a PrivateKeyEntry")
+    } else {
+      return entry.privateKey
     }
-    return entry.privateKey
   }
 
-  fun generateKeyPair(tag: String): KeyPair {
-    val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEY_STORE)
+  private fun generateKeyPair(tag: String): KeyPair {
+    val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, _androidKeyStore)
 
     generator.initialize(
             KeyGenParameterSpec.Builder(
@@ -160,12 +174,11 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
                             KeyProperties.DIGEST_SHA512)
                     .setUserAuthenticationRequired(false)
                     .build())
-    val keypair = generator.generateKeyPair()
-    return keypair
+    return generator.generateKeyPair()
   }
 
   private fun deleteKey(tag: String) {
-    val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEY_STORE)
+    val keyStore: KeyStore = KeyStore.getInstance(_androidKeyStore)
     keyStore.load(null)
     keyStore.deleteEntry(tag)
   }

@@ -45,7 +45,7 @@ class PlatformStringCryptor implements StringCryptor {
   static const MethodChannel _channel =
       const MethodChannel('flutter_string_encryption');
 
-  static final _cryptor = new PlatformStringCryptor._();
+  static final _cryptor = PlatformStringCryptor._();
 
   factory PlatformStringCryptor() => _cryptor;
 
@@ -62,7 +62,7 @@ class PlatformStringCryptor implements StringCryptor {
     } on PlatformException catch (e) {
       switch (e.code) {
         case "mac_mismatch":
-          throw new MacMismatchException();
+          throw MacMismatchException();
         default:
           rethrow;
       }
@@ -107,14 +107,29 @@ class PlatformStringCryptor implements StringCryptor {
           "delete_public_private_key_pair", <String, String>{"tag": tag});
 
   @override
-  Future<String> encryptWithKey(String message, String publicKey) async =>
-      await _channel.invokeMethod("encrypt_message_with_public_key",
+  Future<String> encryptWithKey(String message, String publicKey) async {
+    try {
+      return await _channel.invokeMethod("encrypt_message_with_public_key",
           <String, String>{"message": message, "public_key": publicKey});
+    } on PlatformException catch (e) {
+      throw EncryptionException("${e.code} : ${e.details}");
+    }
+  }
 
   @override
-  Future<String> decryptWithKey(String message, String tag) async =>
-      await _channel.invokeMethod("decrypt_message_with_key",
+  Future<String> decryptWithKey(String message, String tag) async {
+    try {
+      return await _channel.invokeMethod("decrypt_message_with_key",
           <String, String>{"message": message, "tag": tag});
+    } on PlatformException catch (e) {
+      throw EncryptionException("${e.code} : ${e.details}");
+    }
+  }
+}
+
+class EncryptionException implements Exception {
+  String message;
+  EncryptionException(this.message);
 }
 
 class MacMismatchException implements Exception {
