@@ -89,6 +89,17 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
           result.error("public_key_error", "Error getting public key.", null)
         }
       }
+      "get_private_key" -> {
+        val tag = call.argument<String>("tag")
+        try {
+          val privateKey = getPrivateKey(tag)
+          privateKey?.let {
+            result.success(Base64.encodeToString(it.encoded, Base64.DEFAULT))
+          }
+        } catch (e: Exception) {
+          result.error("private_key_error", "Error getting private key.", null)
+        }
+      }
       "delete_public_private_key_pair" -> {
         val tag = call.argument<String>("tag")
         try {

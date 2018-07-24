@@ -98,6 +98,19 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       } catch {
         result(FlutterError(code: "public_key_error", message: "Error getting public key.", details: nil))
       }
+    case "get_private_key":
+      guard let arg = call.arguments as? [String: String],
+        let tag = arg["tag"] else {
+          fatalError("args are formatted badly")
+        }
+      do {
+        if let privateKey = try getPrivateKeyFromTag(tag: tag) {
+          result(base64EncodeKey(key: privateKey))
+        }
+      } catch {
+        result(FlutterError(code: "private_key_error", message: "Error getting private key.", details: nil))
+      }
+    
     case "delete_public_private_key_pair":
       guard let arg = call.arguments as? [String: String],
         let tag = arg["tag"] else {

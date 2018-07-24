@@ -32,6 +32,9 @@ abstract class StringCryptor {
   /// Get the BASE64 encoded public key if one exists.
   Future<String> getPublicKeyWithTag(String tag);
 
+  /// Get the BASE64 encoded private key if one exists.
+  Future<String> getPrivateKeyWithTag(String tag);
+
   /// Delete the Public Private key from the keystore/keychain.
   Future<String> deletePublicPrivateKeysWithTag(String tag);
 
@@ -101,6 +104,9 @@ class PlatformStringCryptor implements StringCryptor {
   Future<String> getPublicKeyWithTag(String tag) async => await _channel
       .invokeMethod("get_public_key", <String, String>{"tag": tag});
 
+  @override
+  Future<String> getPrivateKeyWithTag(String tag) async => await _channel
+      .invokeMethod("get_private_key", <String, String>{"tag": tag});
   @override
   Future<String> deletePublicPrivateKeysWithTag(String tag) async =>
       await _channel.invokeMethod(
