@@ -154,8 +154,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
         return nil
     }
     let data:Data = cfdata as Data
-    let b64Key = data.base64EncodedString()
-    return b64Key
+    return X509PublicKey(key: data)
   }
     
   func getPublicKeyFromTag(tag: String) throws -> SecKey? {
@@ -206,7 +205,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
   }
   
   func encrypt(message: String, base64key: String) throws -> String {
-    let key = Data.init(base64Encoded: base64key)
+    let key = Data.init(base64Encoded: base64key, options: .ignoreUnknownCharacters)
     if key == nil { // base64key was not valid base64 encoded
       throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
     }
@@ -264,6 +263,62 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
     } else {
       throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
     }
+  }
+  
+  public func X509PublicKey(key: Data) -> String? {
+    let result = NSMutableData()
+    
+    let encodingLength: Int = {
+      if key.count + 1 < 128 {
+        return 1
+      } else {
+        return ((key.count + 1) / 256) + 2
+      }
+    }()
+    
+    let OID: [CUnsignedChar] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+                                0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
+    
+    var builder: [CUnsignedChar] = []
+    
+    // ASN.1 SEQUENCE
+    builder.append(0x30)
+    let size = OID.count + 2 + encodingLength + key.count
+    
+    let encodedSize = encodeLength(length: size)
+    builder.append(contentsOf: encodedSize)
+    result.append(builder, length: builder.count)
+    result.append(OID, length: OID.count)
+    builder.removeAll(keepingCapacity: false)
+    
+    builder.append(0x03)
+    
+    let foo = encodeLength(length: key.count + 1)
+    builder.append(contentsOf: foo)
+    builder.append(0x00)
+    result.append(builder, length: builder.count)
+    result.append(key as Data)
+    
+    return result.base64EncodedString(options: .lineLength76Characters)
+  }
+  
+  public func encodeLength(length: Int) -> [CUnsignedChar] {
+    if length < 128 {
+      return [CUnsignedChar(length)];
+    }
+    
+    let i = (length / 256) + 1
+    var len = length
+    var result: [CUnsignedChar] = [CUnsignedChar(i + 0x80)]
+    
+    var j = 0
+    while j < i {
+      result.insert(CUnsignedChar(len & 0xFF), at: 1)
+      len = len >> 8
+      j = j + 1
+    }
+    
+    return result
   }
 }
 
