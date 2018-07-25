@@ -251,7 +251,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
     }
     
-    if let encryptedData = Data(base64Encoded: message) {
+    if let encryptedData = Data(base64Encoded: message, options: .ignoreUnknownCharacters) {
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: encryptedData.count)
     let stream = OutputStream(toBuffer: buffer, capacity: encryptedData.count)
     
