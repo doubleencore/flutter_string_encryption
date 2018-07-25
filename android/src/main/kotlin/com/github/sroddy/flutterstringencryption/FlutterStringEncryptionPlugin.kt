@@ -74,9 +74,13 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
       }
       "generate_public_private_key_pair" -> {
         val tag = call.argument<String>("tag")
-        val keyPair = generateKeyPair(tag)
-        val b64publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT)
-        result.success(b64publicKey)
+        try {
+          val publicKey = getPublicKey(tag) ?: throw Exception("No Public Key")
+          result.success(Base64.encodeToString(publicKey.encoded, Base64.DEFAULT))
+        } catch (e: Exception) {
+          val keyPair = generateKeyPair(tag)
+          result.success(Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT))
+        }
       }
       "get_public_key" -> {
         val tag = call.argument<String>("tag")
