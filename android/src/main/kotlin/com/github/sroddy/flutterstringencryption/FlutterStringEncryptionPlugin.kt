@@ -115,8 +115,8 @@ class FlutterStringEncryptionPlugin(): MethodCallHandler {
       "encrypt_message_with_public_key" -> {
         val message = call.argument<String>("message")
         val publicKey = call.argument<String>("public_key")
-        val encryptedMessage = encryptMessageWithKey(message, publicKey)
         try {
+          val encryptedMessage = encryptMessageWithKey(message, publicKey)
           result.success(encryptedMessage)
         } catch (e: Exception) {
           result.error("encryption_error", "Error encrypting message.", null)
