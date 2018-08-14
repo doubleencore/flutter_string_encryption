@@ -86,6 +86,19 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
         }
       }
       
+    case "import_private_key":
+      guard let arg = call.arguments as? [String: String],
+        let tag = arg["tag"],
+        let key = arg["privateKey"] else {
+          fatalError("args are formatted badly")
+      }
+      do {
+        try importPrivateKey(base64key: key, tag: tag)
+        result(true);
+      } catch {
+        result(FlutterError(code: "import_key_error", message: "Error importing public key.", details: nil))
+      }
+      
     case "get_public_key":
       guard let arg = call.arguments as? [String: String],
         let tag = arg["tag"] else {
@@ -98,6 +111,7 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       } catch {
         result(FlutterError(code: "public_key_error", message: "Error getting public key.", details: nil))
       }
+      
     case "get_private_key":
       guard let arg = call.arguments as? [String: String],
         let tag = arg["tag"] else {
@@ -187,6 +201,9 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
     var item: CFTypeRef?
     let status = SecItemCopyMatching(getquery as CFDictionary, &item)
     guard status == errSecSuccess else { return nil }
+    if item == nil {
+      throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+    }
     let privateKey = item as! SecKey
     return privateKey
   }
@@ -215,6 +232,31 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
       throw NSError(domain: NSOSStatusErrorDomain, code: 0 , userInfo: nil)
     }
     return publicKey
+  }
+  
+  func importPrivateKey(base64key: String, tag: String) throws {
+    // clear the key first.
+    do { try deleteKeyWithTag(tag: tag) } catch {}
+
+    try addRSAPrivateKey(base64key, tagName: tag)
+//    let newKey = "-----BEGIN RSA PRIVATE KEY-----\n"+base64key+"\n-----END RSA PRIVATE KEY-----"
+//    if let key = Data.init(base64Encoded: base64keys, options: .ignoreUnknownCharacters) {
+//      let privkeyData = stripPrivateKeyHeader(key)
+//      if ( privkeyData == nil ) {
+//        throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+//      }
+//
+//      let addquery: [String: Any] = [kSecClass as String: kSecClassKey,
+//                                     kSecAttrApplicationTag as String: tag.data(using: .utf8)!,
+//                                     kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+//                                     kSecValueData as String: key,
+//                                     kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+//                                     kSecReturnPersistentRef as String: true]
+//      let status = SecItemAdd(addquery as CFDictionary, nil)
+//      guard status == errSecSuccess else {
+//        throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
+//      }
+//    }
   }
   
   func encrypt(message: String, base64key: String) throws -> String {
@@ -276,6 +318,108 @@ public class SwiftFlutterStringEncryptionPlugin: NSObject, FlutterPlugin {
     } else {
       throw NSError(domain: NSOSStatusErrorDomain, code: 0, userInfo: nil)
     }
+  }
+  
+  func getRSAKeyFromKeychain(_ tagName: String) -> SecKey? {
+    let queryFilter: [String: AnyObject] = [
+      String(kSecClass)             : kSecClassKey,
+      String(kSecAttrKeyType)       : kSecAttrKeyTypeRSA,
+      String(kSecAttrApplicationTag): tagName as AnyObject,
+      //String(kSecAttrAccessible)    : kSecAttrAccessibleWhenUnlocked,
+      String(kSecReturnRef)         : true as AnyObject
+    ]
+    
+    var keyPtr: AnyObject?
+    let result = SecItemCopyMatching(queryFilter as CFDictionary, &keyPtr)
+    if ( result != noErr || keyPtr == nil ) {
+      return nil
+    }
+    return keyPtr as! SecKey?
+  }
+  func base64Decode(_ strBase64: String) -> Data {
+    let data = Data(base64Encoded: strBase64, options: [])
+    return data!
+  }
+  func addRSAPrivateKey(_ privkeyBase64: String, tagName: String) throws -> SecKey? {
+    let fullRange = NSRange(location: 0, length: privkeyBase64.characters.count)
+    let regExp = try! NSRegularExpression(pattern: "(-----BEGIN.*?-----)|(-----END.*?-----)|\\s+", options: [])
+    let myPrivkeyBase64 = regExp.stringByReplacingMatches(in: privkeyBase64, options: [], range: fullRange, withTemplate: "")
+    return try addRSAPrivateKey(base64Decode(myPrivkeyBase64), tagName: tagName)
+  }
+  func addRSAPrivateKey(_ privkey: Data, tagName: String) throws -> SecKey? {
+    // Delete any old lingering key with the same tag
+//    deleteRSAKeyFromKeychain(tagName)
+//    try deleteKeyWithTag(tag: tagName)
+    
+    let privkeyData = try stripPrivateKeyHeader(privkey)
+    if ( privkeyData == nil ) {
+      return nil
+    }
+    
+    // Add persistent version of the key to system keychain
+    let queryFilter: [String : Any] = [
+      (kSecClass as String)              : kSecClassKey,
+      (kSecAttrKeyType as String)        : kSecAttrKeyTypeRSA,
+      (kSecAttrApplicationTag as String) : tagName,
+      //(kSecAttrAccessible as String)     : kSecAttrAccessibleWhenUnlocked,
+      (kSecValueData as String)          : privkeyData!,
+      (kSecAttrKeyClass as String)       : kSecAttrKeyClassPrivate,
+      (kSecReturnPersistentRef as String): true
+      ] as [String : Any]
+    let result = SecItemAdd(queryFilter as CFDictionary, nil)
+    if ((result != noErr) && (result != errSecDuplicateItem)) {
+      NSLog("Cannot add key to keychain, status \(result).")
+      return nil
+    }
+    
+    return getRSAKeyFromKeychain(tagName)
+  }
+  func stripPrivateKeyHeader(_ privkey: Data) throws -> Data? {
+    if ( privkey.count == 0 ) {
+      return nil
+    }
+    
+    var keyAsArray = [UInt8](repeating: 0, count: privkey.count / MemoryLayout<UInt8>.size)
+    (privkey as NSData).getBytes(&keyAsArray, length: privkey.count)
+    
+    //PKCS#8: magic byte at offset 22, check if it's actually ASN.1
+    var idx = 22
+    if ( keyAsArray[idx] != 0x04 ) {
+      return privkey
+    }
+    idx += 1
+    
+    //now we need to find out how long the key is, so we can extract the correct hunk
+    //of bytes from the buffer.
+    var len = Int(keyAsArray[idx])
+    idx += 1
+    let det = len & 0x80 //check if the high bit set
+    if (det == 0) {
+      //no? then the length of the key is a number that fits in one byte, (< 128)
+      len = len & 0x7f
+    } else {
+      //otherwise, the length of the key is a number that doesn't fit in one byte (> 127)
+      var byteCount = Int(len & 0x7f)
+      if (byteCount + idx > privkey.count) {
+        return nil
+      }
+      //so we need to snip off byteCount bytes from the front, and reverse their order
+      var accum: UInt = 0
+      var idx2 = idx
+      idx += byteCount
+      while (byteCount > 0) {
+        //after each byte, we shove it over, accumulating the value into accum
+        accum = (accum << 8) + UInt(keyAsArray[idx2])
+        idx2 += 1
+        byteCount -= 1
+      }
+      // now we have read all the bytes of the key length, and converted them to a number,
+      // which is the number of bytes in the actual key.  we use this below to extract the
+      // key bytes and operate on them
+      len = Int(accum)
+    }
+    return privkey.subdata(in: idx..<idx+len)
+    //return privkey.subdata(in: NSMakeRange(idx, len).toRange()!)
   }
   
   public func X509PublicKey(key: Data) -> String? {

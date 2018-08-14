@@ -29,6 +29,9 @@ abstract class StringCryptor {
   /// Generates a Public and Private key.
   Future<String> generatePublicPrivateKeyPairWithTag(String tag);
 
+  /// Import a private key.
+  Future<bool> importPrivateKeyWithTag(String privateKey, String tag);
+
   /// Get the BASE64 encoded public key if one exists.
   Future<String> getPublicKeyWithTag(String tag);
 
@@ -99,6 +102,11 @@ class PlatformStringCryptor implements StringCryptor {
   Future<String> generatePublicPrivateKeyPairWithTag(String tag) async =>
       await _channel.invokeMethod(
           "generate_public_private_key_pair", <String, String>{"tag": tag});
+
+  @override
+  Future<bool> importPrivateKeyWithTag(String privateKey, String tag) async =>
+      await _channel.invokeMethod("import_private_key",
+          <String, String>{"privateKey": privateKey.trim(), "tag": tag.trim()});
 
   @override
   Future<String> getPublicKeyWithTag(String tag) async => await _channel
